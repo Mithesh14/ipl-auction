@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IPL Mega Auction 2025 - Live Auction</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='auction.css') }}">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="auction-container">
+        <!-- Top Bar -->
+        <header class="auction-header">
+            <div class="header-left">
+                <h1>🏏 IPL Mega Auction 2025</h1>
+                <div class="user-info">
+                    <span id="user-name">Loading...</span>
+                    <span class="purse">💰 <span id="my-purse">100.00</span> Cr</span>
+                </div>
+            </div>
+            <div class="header-right">
+                <button id="my-team-btn" class="btn-icon">👥 My Team</button>
+                <button id="logout-btn" class="btn-icon">🚪 Logout</button>
+            </div>
+        </header>
+
+        <div class="auction-main">
+            <!-- Left Panel: Category Selection / Current Player -->
+            <div class="left-panel">
+                <div id="category-selector" class="panel-section">
+                    <h2>📋 Select Auction Pool</h2>
+                    {% if is_admin %}
+                    <div class="category-grid" id="category-grid"></div>
+                    {% else %}
+                    <div class="waiting-message">
+                        <p>⏳ Waiting for auctioneer to start the auction...</p>
+                        <p class="waiting-subtitle">The auction will begin once the admin selects a player pool.</p>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div id="current-player-section" class="panel-section" style="display: none;">
+                    <div class="current-player-card">
+                        <div class="lot-number">LOT #<span id="lot-number">1</span></div>
+                        <div class="player-name-large" id="current-player-name">Loading...</div>
+                        <div class="player-category" id="player-category">Category</div>
+                        <div class="base-price">Base Price: <span id="base-price">0</span> Cr</div>
+                        
+                        <div class="bidding-section">
+                            <div class="current-bid">
+                                <span>Current Highest Bid:</span>
+                                <span class="highest-bid" id="highest-bid">0.00 Cr</span>
+                            </div>
+                            <div class="bid-input-group">
+                                <input type="number" id="bid-amount" placeholder="Enter bid amount" step="0.25" min="0">
+                                <button id="place-bid-btn" class="btn-bid">💰 Place Bid</button>
+                            </div>
+                            <div id="bid-status"></div>
+                        </div>
+
+                        <div class="bids-list" id="bids-list">
+                            <h4>Recent Bids:</h4>
+                            <div id="bids-container"></div>
+                        </div>
+
+                        <div class="player-actions">
+                            <button id="player-info-btn" class="btn-info">📊 Player Info</button>
+                            {% if is_admin %}
+                            <button id="sell-player-btn" class="btn-sell">✅ Sell to Highest Bidder</button>
+                            {% endif %}
+                            <button id="next-player-btn" class="btn-next">⏭️ Next Player</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel: Live Feed & My Team -->
+            <div class="right-panel">
+                <!-- Live Auction Feed -->
+                <div class="panel-section live-feed">
+                    <h2>📢 Live Auction Feed</h2>
+                    <div class="feed-subtitle">Real-time updates from the auction floor</div>
+                    <div id="live-feed-content"></div>
+                </div>
+
+                <!-- My Purchases -->
+                <div class="panel-section my-purchases">
+                    <h2>🛒 My Purchases</h2>
+                    <div id="purchases-list"></div>
+                    <div class="purse-summary">
+                        <div>Total Spent: <span id="total-spent">0.00</span> Cr</div>
+                        <div>Remaining: <span id="remaining-purse">100.00</span> Cr</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- My Team Modal -->
+    <div id="team-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>👥 My Team</h2>
+                <button class="close-btn" id="close-team-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="team-section">
+                    <h3>Playing 11</h3>
+                    <div id="playing-11-container" class="playing-11-grid"></div>
+                </div>
+                <div class="team-section">
+                    <h3>All Players</h3>
+                    <div id="all-players-container" class="all-players-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Player Info Modal -->
+    <div id="player-info-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-player-name">Player Name</h2>
+                <button class="close-btn" id="close-info-modal">&times;</button>
+            </div>
+            <div class="modal-body" id="player-info-content">
+                Loading player information...
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='auction.js') }}"></script>
+</body>
+</html>
+

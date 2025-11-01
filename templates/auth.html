@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IPL Auction - {{ mode|title }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='auth.css') }}">
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-card">
+            <div class="auth-header">
+                <h1>🏏 IPL Mega Auction 2025</h1>
+                <p class="subtitle">{{ 'Sign in to join the auction' if mode == 'login' else 'Create your team account' }}</p>
+            </div>
+            
+            <div id="auth-form">
+                {% if mode == 'login' %}
+                    <input type="text" id="username" placeholder="Username" required autocomplete="username">
+                    <input type="password" id="password" placeholder="Password" required autocomplete="current-password">
+                    <button id="submit-btn" class="btn-primary">Sign In</button>
+                {% else %}
+                    <input type="text" id="username" placeholder="Username" required autocomplete="username">
+                    <input type="email" id="email" placeholder="Email (optional)" autocomplete="email">
+                    <input type="text" id="team-name" placeholder="Team Name (optional)">
+                    <input type="password" id="password" placeholder="Password" required autocomplete="new-password">
+                    <button id="submit-btn" class="btn-primary">Create Account</button>
+                    <p class="auth-switch">Already have an account? <a href="#" id="switch-to-login">Sign In</a></p>
+                {% endif %}
+            </div>
+            
+            <div id="error-message" class="error-message" style="display: none;"></div>
+            <div id="success-message" class="success-message" style="display: none;"></div>
+        </div>
+    </div>
+    <script>
+        const mode = '{{ mode }}';
+        const submitBtn = document.getElementById('submit-btn');
+        const errorMsg = document.getElementById('error-message');
+        const successMsg = document.getElementById('success-message');
+        
+        function showError(msg) {
+            errorMsg.textContent = msg;
+            errorMsg.style.display = 'block';
+            successMsg.style.display = 'none';
+        }
+        
+        function showSuccess(msg) {
+            successMsg.textContent = msg;
+            successMsg.style.display = 'block';
+            errorMsg.style.display = 'none';
+        }
+        
+        submitBtn.addEventListener('click', async () => {
+            const data = mode === 'login' ? {
+                username: document.getElementById('username').value,
+                password: document.getElementById('password').value
+            } : {
+                username: document.getElementById('username').value,
+                email: document.getElementById('email').value || '',
+                team_name: document.getElementById('team-name').value || '',
+                password: document.getElementById('password').value
+            };
+            
+            const endpoint = mode === 'login' ? '/login' : '/signup';
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+            
+            const result = await res.json();
+            if (result.success) {
+                showSuccess('Success! Redirecting...');
+                // Force reload to trigger auth check
+                setTimeout(() => {
+                    window.location.href = '/auction';
+                }, 500);
+            } else {
+                showError(result.message || 'An error occurred');
+            }
+        });
+        
+        // Enter key support
+        document.querySelectorAll('input').forEach(input => {
+            input.addEventListener('keypress', e => {
+                if (e.key === 'Enter') submitBtn.click();
+            });
+        });
+        
+        // Signup option removed - users are pre-registered
+    </script>
+</body>
+</html>
+
