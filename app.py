@@ -207,10 +207,14 @@ def get_shuffled_set(category, set_num):
 
 @app.route('/')
 def index():
-    """Home page - redirects based on auth status"""
+    """Home page - shows login if not authenticated, auction if authenticated"""
     mode = request.args.get('mode', 'login')
-    if current_user.is_authenticated:
-        return render_template('auction.html')
+    # Check if user is actually authenticated (verify session)
+    if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated:
+        # User is logged in, show auction page with admin status
+        is_admin = current_user.username.lower() == ADMIN_USERNAME.lower()
+        return render_template('auction.html', is_admin=is_admin)
+    # User not authenticated, show login page
     return render_template('auth.html', mode=mode)
 
 @app.route('/auction')

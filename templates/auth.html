@@ -62,7 +62,12 @@
                 password: document.getElementById('password').value
             };
             
-            const endpoint = mode === 'login' ? '/login' : '/signup';
+            // Signup removed - all users are pre-registered
+            if (mode !== 'login') {
+                showError('Signup is not available. All users are pre-registered by admin.');
+                return;
+            }
+            const endpoint = '/login';
             const res = await fetch(endpoint, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
