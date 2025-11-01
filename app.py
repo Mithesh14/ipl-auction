@@ -1221,8 +1221,8 @@ if __name__ == '__main__':
         print(f"\n📡 For same WiFi network:")
         print(f"   http://{get_local_ip()}:8080")
         print(f"\n🌐 For global access:")
-        print(f"   Deploy to Render.com or Railway.app via GitHub")
-        print(f"   See DEPLOY.md for instructions")
+        print(f"   Deploy to PythonAnywhere.com (recommended for Flask)")
+        print(f"   See PYTHONANYWHERE_DEPLOY.md for instructions")
         print("="*60 + "\n")
         PORT = 8080
         # Allow PORT from environment for cloud hosting
