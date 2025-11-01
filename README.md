@@ -40,10 +40,19 @@ All users are pre-registered with username = password.
 
 ## Deployment
 
-This app is configured for Railway/Render deployment with:
+This app is configured for cloud deployment (Railway, Render, etc.) with:
 - `Procfile` for web service
-- Environment variable PORT support
+- Environment variable PORT support (auto-detected)
 - Database initialization on startup
+
+### Quick Deploy
+
+1. Push code to GitHub
+2. Connect to Railway.app or Render.com
+3. Select repository
+4. Auto-deploys with permanent URL
+
+See deployment platform documentation for details.
 
 ## Tech Stack
 
