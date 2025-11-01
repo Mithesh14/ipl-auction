@@ -1220,10 +1220,9 @@ if __name__ == '__main__':
         print(f"   Network:  http://{get_local_ip()}:8080")
         print(f"\n📡 For same WiFi network:")
         print(f"   http://{get_local_ip()}:8080")
-        print(f"\n🌐 For global access (users in different locations):")
-        print(f"   Use ngrok, Cloudflare Tunnel, or see DEPLOYMENT_GUIDE.md")
-        print(f"   Quick start: ngrok http 8080")
-        print(f"\n⚠️  For network access, make sure firewall allows port 8080")
+        print(f"\n🌐 For global access:")
+        print(f"   Deploy to Render.com or Railway.app via GitHub")
+        print(f"   See DEPLOY.md for instructions")
         print("="*60 + "\n")
         PORT = 8080
         # Allow PORT from environment for cloud hosting
