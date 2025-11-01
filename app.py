@@ -891,13 +891,19 @@ def get_player_category(player_name):
 
 # WebSocket events for real-time bidding
 @socketio.on('connect')
+@login_required
 def handle_connect(auth):
     """User connects to auction room"""
-    # Note: Socket.IO doesn't directly use Flask-Login sessions
-    # In production, you'd want to verify the session here
-    # For now, we'll trust authenticated users
     join_room(auction_state['room_id'])
+    # Emit user connected event
+    emit('user_connected', {'username': current_user.username}, room=auction_state['room_id'])
     # Send current auction state
+    emit('auction_state', auction_state)
+
+@socketio.on('get_auction_state')
+@login_required
+def handle_get_auction_state():
+    """Handle request for current auction state (for auto-refresh)"""
     emit('auction_state', auction_state)
 
 @socketio.on('disconnect')
@@ -1146,20 +1152,26 @@ def my_team():
     """Get user's purchased players"""
     conn = sqlite3.connect(app.config['DATABASE'])
     c = conn.cursor()
+    # Fixed query: Get players from teams table joined with auction_log to get final_price
     c.execute('''SELECT t.player_name, t.player_category, t.purchase_price, t.position, 
                  al.final_price, t.is_captain FROM teams t
-                 LEFT JOIN auction_log al ON t.player_name = al.player_name AND t.user_id = al.sold_to_user_id
-                 WHERE t.user_id = ? ORDER BY t.position''', (current_user.id,))
+                 LEFT JOIN auction_log al ON t.player_name = al.player_name AND al.sold_to_user_id = t.user_id
+                 WHERE t.user_id = ? ORDER BY COALESCE(t.position, 999), t.player_name''', (current_user.id,))
     players = []
     for row in c.fetchall():
         category = row[1] or 'Unknown'
+        # Use final_price from auction_log if available, otherwise use purchase_price
+        price = float(row[4]) if row[4] is not None else float(row[2] or 0)
+        position = row[3]  # Can be None
+        is_captain = bool(row[5]) if row[5] is not None else False
+        
         players.append({
             'name': row[0],
             'category': category,
-            'price': row[4] or row[2],
-            'position': row[3],
+            'price': price,
+            'position': position,
             'is_foreign': is_foreign_player(category),
-            'is_captain': bool(row[5]) if row[5] is not None else (row[3] == 1)  # Default position 1 as captain
+            'is_captain': is_captain or (position == 1)  # Default position 1 as captain
         })
     
     # Get current purse

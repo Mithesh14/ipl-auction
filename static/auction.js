@@ -11,6 +11,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadCategories();
     setupEventListeners();
     setupSocketListeners();
+    
+    // Auto-refresh auction state every 1 second
+    setInterval(async () => {
+        if (auctionState && auctionState.status === 'active') {
+            try {
+                // Request current auction state from server
+                socket.emit('get_auction_state');
+            } catch (error) {
+                console.error('Error refreshing auction state:', error);
+            }
+        }
+    }, 1000);
 });
 
 async function loadUserInfo() {
@@ -148,6 +160,13 @@ function setupSocketListeners() {
     socket.on('auction_state', (state) => {
         auctionState = state;
         updateAuctionDisplay();
+        // Update bids list for current player if auction is active
+        if (auctionState && auctionState.current_player) {
+            updateBidsList(auctionState.current_player.name);
+            const bids = auctionState.bids[auctionState.current_player.name] || [];
+            const highest = bids.length > 0 ? Math.max(...bids.map(b => b.amount)) : 0;
+            updateHighestBid(highest);
+        }
         // Re-render category grid to update button states if admin
         if (currentUser && currentUser.username.toLowerCase() === 'mithesh') {
             fetch('/api/init', { method: 'POST' })
@@ -359,6 +378,13 @@ function setupEventListeners() {
 
     document.getElementById('close-team-modal').addEventListener('click', () => {
         document.getElementById('team-modal').classList.remove('active');
+    });
+
+    // Back to pool button
+    document.getElementById('back-to-pool-btn').addEventListener('click', () => {
+        // Show category selector and hide current player section
+        document.getElementById('category-selector').style.display = 'block';
+        document.getElementById('current-player-section').style.display = 'none';
     });
 
     // Logout
