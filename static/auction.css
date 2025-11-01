@@ -428,13 +428,18 @@ body {
     justify-content: center;
 }
 
-.btn-info, .btn-next, .btn-sell {
+.btn-back, .btn-info, .btn-next, .btn-sell {
     padding: 12px 24px;
     border: none;
     border-radius: 8px;
     font-size: 0.95rem;
     cursor: pointer;
     transition: all 0.3s;
+}
+
+.btn-back {
+    background: linear-gradient(135deg, #64748b 0%, #475569 100%);
+    color: white;
 }
 
 .btn-info {
@@ -452,7 +457,7 @@ body {
     color: white;
 }
 
-.btn-info:hover, .btn-next:hover, .btn-sell:hover {
+.btn-back:hover, .btn-info:hover, .btn-next:hover, .btn-sell:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
 }
