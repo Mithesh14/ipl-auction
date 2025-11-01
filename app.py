@@ -1066,6 +1066,39 @@ def handle_sell(data):
     if player_name in auction_state['bids']:
         del auction_state['bids'][player_name]
     
+    # Clear current player and move to next player automatically
+    # Check if there are more players in the current set
+    if auction_state['status'] == 'active' and auction_state['current_category'] and auction_state['current_set']:
+        # Get the players for current set
+        players_with_prices = []
+        raw_data = load_raw_data()
+        category_data = raw_data.get(auction_state['current_category'], {})
+        set_players = get_shuffled_set(auction_state['current_category'], auction_state['current_set'])
+        
+        for pname in set_players:
+            base_price = get_player_base_price(pname)
+            players_with_prices.append({
+                'name': pname,
+                'base_price': base_price
+            })
+        
+        # Find current player index
+        current_index = auction_state.get('current_player_index', 0)
+        next_index = current_index + 1
+        
+        if next_index < len(players_with_prices):
+            # Move to next player
+            auction_state['current_player'] = players_with_prices[next_index]
+            auction_state['current_player_index'] = next_index
+            # Initialize bids for new player
+            auction_state['bids'][players_with_prices[next_index]['name']] = []
+        else:
+            # No more players in this set
+            auction_state['current_player'] = None
+            auction_state['current_player_index'] = 0
+            auction_state['status'] = 'waiting'
+            auction_state['active_pool'] = None
+    
     # Broadcast sale
     socketio.emit('player_sold', {
         'player_name': player_name,
@@ -1074,6 +1107,9 @@ def handle_sell(data):
         'price': final_price,
         'remaining_purse': remaining_purse
     }, room=auction_state['room_id'])
+    
+    # Broadcast updated auction state (with next player)
+    socketio.emit('auction_state', auction_state, room=auction_state['room_id'])
 
 @socketio.on('start_auction')
 def handle_start_auction(data):
@@ -1152,15 +1188,32 @@ def my_team():
     """Get user's purchased players"""
     conn = sqlite3.connect(app.config['DATABASE'])
     c = conn.cursor()
+    
+    # Check if is_captain column exists, if not add it
+    try:
+        c.execute("PRAGMA table_info(teams)")
+        columns = [col[1] for col in c.fetchall()]
+        if 'is_captain' not in columns:
+            c.execute('ALTER TABLE teams ADD COLUMN is_captain INTEGER DEFAULT 0')
+            conn.commit()
+    except:
+        pass  # Column might already exist or error
+    
     # Fixed query: Get players from teams table joined with auction_log to get final_price
+    # Use the most recent auction_log entry for each player
     c.execute('''SELECT t.player_name, t.player_category, t.purchase_price, t.position, 
-                 al.final_price, t.is_captain FROM teams t
-                 LEFT JOIN auction_log al ON t.player_name = al.player_name AND al.sold_to_user_id = t.user_id
-                 WHERE t.user_id = ? ORDER BY COALESCE(t.position, 999), t.player_name''', (current_user.id,))
+                 COALESCE((SELECT al.final_price FROM auction_log al 
+                           WHERE al.player_name = t.player_name 
+                           AND al.sold_to_user_id = t.user_id 
+                           ORDER BY al.timestamp DESC LIMIT 1), t.purchase_price) as final_price,
+                 COALESCE(t.is_captain, 0) as is_captain
+                 FROM teams t
+                 WHERE t.user_id = ? 
+                 ORDER BY COALESCE(t.position, 999), t.player_name''', (current_user.id,))
     players = []
     for row in c.fetchall():
         category = row[1] or 'Unknown'
-        # Use final_price from auction_log if available, otherwise use purchase_price
+        # final_price is already calculated in query (row[4])
         price = float(row[4]) if row[4] is not None else float(row[2] or 0)
         position = row[3]  # Can be None
         is_captain = bool(row[5]) if row[5] is not None else False

@@ -4,6 +4,9 @@ const socket = io();
 let currentUser = null;
 let auctionState = null;
 let categories = [];
+let lastAnnouncedPlayerName = null; // Track last player announced to avoid duplicate messages
+let lastBidIds = new Set(); // Track bid IDs to avoid duplicate bid messages
+let announcedUsers = new Set(); // Track users who have been announced as joined/left
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async () => {
@@ -158,15 +161,23 @@ function setupSocketListeners() {
     });
 
     socket.on('auction_state', (state) => {
+        const previousPlayerName = auctionState?.current_player?.name;
         auctionState = state;
-        updateAuctionDisplay();
-        // Update bids list for current player if auction is active
-        if (auctionState && auctionState.current_player) {
-            updateBidsList(auctionState.current_player.name);
-            const bids = auctionState.bids[auctionState.current_player.name] || [];
-            const highest = bids.length > 0 ? Math.max(...bids.map(b => b.amount)) : 0;
-            updateHighestBid(highest);
+        
+        // Only update display if player actually changed
+        const currentPlayerName = auctionState?.current_player?.name;
+        if (previousPlayerName !== currentPlayerName) {
+            updateAuctionDisplay();
+        } else {
+            // Just update bids/highest bid without re-announcing player
+            if (auctionState && auctionState.current_player) {
+                updateBidsList(auctionState.current_player.name);
+                const bids = auctionState.bids[auctionState.current_player.name] || [];
+                const highest = bids.length > 0 ? Math.max(...bids.map(b => b.amount)) : 0;
+                updateHighestBid(highest);
+            }
         }
+        
         // Re-render category grid to update button states if admin
         if (currentUser && currentUser.username.toLowerCase() === 'mithesh') {
             fetch('/api/init', { method: 'POST' })
@@ -185,6 +196,8 @@ function setupSocketListeners() {
     });
 
     socket.on('new_bid', (data) => {
+        // Only add to feed if this is a genuinely new bid (not from auto-refresh)
+        // The new_bid event is emitted from server only when a real bid happens
         addBidToFeed(data);
         updateBidsList(data.player_name);
         if (auctionState && auctionState.current_player && 
@@ -195,10 +208,14 @@ function setupSocketListeners() {
 
     socket.on('player_sold', (data) => {
         addSaleToFeed(data);
+        // Update My Team for the buyer
         if (currentUser && data.buyer === currentUser.username) {
             updateMyTeam();
         }
+        // Update purse for all users (they need to see updated purchases)
         updatePurse();
+        // Also update My Team purchases list (shows in right panel)
+        updateMyTeam();
     });
 
     socket.on('bid_error', (data) => {
@@ -206,11 +223,25 @@ function setupSocketListeners() {
     });
 
     socket.on('user_connected', (data) => {
-        addFeedMessage(`${data.username} joined the auction`, 'info');
+        // Only show join message once per user
+        const userKey = `joined_${data.username}`;
+        if (!announcedUsers.has(userKey)) {
+            addFeedMessage(`${data.username} joined the auction`, 'info');
+            announcedUsers.add(userKey);
+            // Remove from left set if they had left before
+            announcedUsers.delete(`left_${data.username}`);
+        }
     });
 
     socket.on('user_disconnected', (data) => {
-        addFeedMessage(`${data.username} left the auction`, 'info');
+        // Only show leave message once per user
+        const userKey = `left_${data.username}`;
+        if (!announcedUsers.has(userKey)) {
+            addFeedMessage(`${data.username} left the auction`, 'info');
+            announcedUsers.add(userKey);
+            // Remove from joined set so they can rejoin later
+            announcedUsers.delete(`joined_${data.username}`);
+        }
     });
 
     socket.on('pool_started', (data) => {
@@ -229,6 +260,7 @@ function updateAuctionDisplay() {
     if (!auctionState || !auctionState.current_player) {
         document.getElementById('category-selector').style.display = 'block';
         document.getElementById('current-player-section').style.display = 'none';
+        lastAnnouncedPlayerName = null; // Reset when no player is on block
         return;
     }
 
@@ -251,11 +283,14 @@ function updateAuctionDisplay() {
     updateHighestBid(highest);
     updateBidsList(player.name);
     
-    // Add player announcement to feed
-    addFeedMessage(
-        `🎯 <strong>LOT #${lotNum}</strong> - <strong>${player.name}</strong> is now on the block! Base Price: ₹${player.base_price || '0.00'} Cr`,
-        'info'
-    );
+    // Add player announcement to feed ONLY if this is a new player
+    if (lastAnnouncedPlayerName !== player.name) {
+        addFeedMessage(
+            `🎯 <strong>LOT #${lotNum}</strong> - <strong>${player.name}</strong> is now on the block! Base Price: ₹${player.base_price || '0.00'} Cr`,
+            'info'
+        );
+        lastAnnouncedPlayerName = player.name;
+    }
 }
 
 function updateHighestBid(amount) {
@@ -348,10 +383,15 @@ function setupEventListeners() {
         if (e.key === 'Enter') placeBid();
     });
 
-    // Next player button (admin only - for demo, everyone can use it)
-    document.getElementById('next-player-btn').addEventListener('click', () => {
-        socket.emit('next_player');
-    });
+    // Next player button (admin only)
+    const nextPlayerBtn = document.getElementById('next-player-btn');
+    if (nextPlayerBtn) {
+        nextPlayerBtn.addEventListener('click', () => {
+            if (currentUser && currentUser.username.toLowerCase() === 'mithesh') {
+                socket.emit('next_player');
+            }
+        });
+    }
 
     // Sell player button
     const sellBtn = document.getElementById('sell-player-btn');
@@ -382,9 +422,27 @@ function setupEventListeners() {
 
     // Back to pool button
     document.getElementById('back-to-pool-btn').addEventListener('click', () => {
-        // Show category selector and hide current player section
-        document.getElementById('category-selector').style.display = 'block';
-        document.getElementById('current-player-section').style.display = 'none';
+        // Only allow going back if we're the admin and auction is not active
+        // OR if we want to pause/reset the current player view
+        if (auctionState && auctionState.current_player) {
+            // For admin: ask if they want to pause/go back
+            if (currentUser && currentUser.username.toLowerCase() === 'mithesh') {
+                if (confirm('Go back to pool selection? The current player will remain on block until you continue.')) {
+                    // Just hide the player view locally - server state remains
+                    document.getElementById('category-selector').style.display = 'block';
+                    document.getElementById('current-player-section').style.display = 'none';
+                    lastAnnouncedPlayerName = null; // Reset so if we come back, it re-announces
+                }
+            } else {
+                // For non-admin: just hide the view
+                document.getElementById('category-selector').style.display = 'block';
+                document.getElementById('current-player-section').style.display = 'none';
+            }
+        } else {
+            // No player on block, safe to show category selector
+            document.getElementById('category-selector').style.display = 'block';
+            document.getElementById('current-player-section').style.display = 'none';
+        }
     });
 
     // Logout
@@ -481,32 +539,51 @@ document.getElementById('close-info-modal').addEventListener('click', () => {
 async function updateMyTeam() {
     try {
         const res = await fetch('/api/my-team');
+        if (!res.ok) {
+            console.error('Failed to fetch team data:', res.status);
+            return;
+        }
         const data = await res.json();
         
-        // Update purchases list
-        const purchasesList = document.getElementById('purchases-list');
-        purchasesList.innerHTML = '';
+        // Debug logging
+        console.log('My Team API Response:', data);
+        console.log('Players count:', data.players ? data.players.length : 0);
+        if (data.players && data.players.length > 0) {
+            console.log('Sample player:', data.players[0]);
+        }
         
-        if (data.players.length === 0) {
-            purchasesList.innerHTML = '<p style="color: var(--text-light);">No players purchased yet</p>';
-        } else {
-            data.players.forEach(player => {
-                const div = document.createElement('div');
-                div.className = 'purchase-item';
-                div.innerHTML = `
-                    <span class="player-name">${player.name}</span>
-                    <span class="price">${player.price.toFixed(2)} Cr</span>
-                `;
-                purchasesList.appendChild(div);
-            });
+        // Update purchases list (right panel - "My Purchases")
+        const purchasesList = document.getElementById('purchases-list');
+        if (purchasesList) {
+            purchasesList.innerHTML = '';
+            
+            if (!data.players || data.players.length === 0) {
+                purchasesList.innerHTML = '<p style="color: var(--text-light);">No players purchased yet</p>';
+            } else {
+                data.players.forEach(player => {
+                    const div = document.createElement('div');
+                    div.className = 'purchase-item';
+                    div.innerHTML = `
+                        <span class="player-name">${player.name}</span>
+                        <span class="price">${player.price.toFixed(2)} Cr</span>
+                    `;
+                    purchasesList.appendChild(div);
+                });
+            }
         }
 
-        // Update playing 11
-        updatePlaying11(data.players);
+    // Always update playing 11 in modal when data is available
+    updatePlaying11(data.players || []);
         
-        // Update purse
-        document.getElementById('total-spent').textContent = data.total_spent.toFixed(2);
-        document.getElementById('remaining-purse').textContent = data.purse_remaining.toFixed(2);
+        // Update purse summary
+        const totalSpentEl = document.getElementById('total-spent');
+        const remainingPurseEl = document.getElementById('remaining-purse');
+        if (totalSpentEl && data.total_spent !== undefined) {
+            totalSpentEl.textContent = data.total_spent.toFixed(2);
+        }
+        if (remainingPurseEl && data.purse_remaining !== undefined) {
+            remainingPurseEl.textContent = data.purse_remaining.toFixed(2);
+        }
     } catch (error) {
         console.error('Error updating team:', error);
     }
@@ -514,7 +591,20 @@ async function updateMyTeam() {
 
 function updatePlaying11(players) {
     const container = document.getElementById('playing-11-container');
+    if (!container) return;
+    
     container.innerHTML = '';
+    
+    // If no players, show message
+    if (!players || players.length === 0) {
+        container.innerHTML = '<div style="text-align: center; color: var(--text-light); padding: 20px;">No players in your team yet</div>';
+        // Also clear all players list
+        const allContainer = document.getElementById('all-players-container');
+        if (allContainer) {
+            allContainer.innerHTML = '<div style="text-align: center; color: var(--text-light); padding: 20px;">No players purchased</div>';
+        }
+        return;
+    }
     
     // Sort players by position
     const sorted = [...players].sort((a, b) => (a.position || 999) - (b.position || 999));
@@ -568,6 +658,7 @@ function updatePlaying11(players) {
 
     // Add all players list
     const allContainer = document.getElementById('all-players-container');
+    if (!allContainer) return; // Safety check
     allContainer.innerHTML = '';
     sorted.forEach(player => {
         const div = document.createElement('div');

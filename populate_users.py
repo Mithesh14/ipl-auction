@@ -16,6 +16,8 @@ USERS = [
     ('ruben', 'ruben', 'Ruben\'s Team'),
     ('keerthi', 'keerthi', 'Keerthi\'s Team'),
     ('aki', 'aki', 'Aki\'s Team'),
+    ('leodas', 'leodas', 'Leodas\'s Team'),
+    ('bala', 'bala', 'Bala\'s Team'),
 ]
 
 DATABASE = 'auction.db'
